@@ -19,7 +19,16 @@ contract Deploy is Script {
 
         address treasury = vm.envAddress("TREASURY_ADDRESS");
         address reservoir = vm.envAddress("RESERVOIR_ADDRESS");
-        uint16 tax = uint16(vm.envUint("INITIAL_TAX_BPS"));
+        
+        // Validate addresses
+        require(treasury != address(0), "TREASURY_ADDRESS cannot be zero");
+        require(reservoir != address(0), "RESERVOIR_ADDRESS cannot be zero");
+        
+        // Validate tax before casting to prevent silent truncation
+        uint256 taxBps = vm.envUint("INITIAL_TAX_BPS");
+        require(taxBps <= 1000, "INITIAL_TAX_BPS must be <= 1000 (10%)");
+        require(taxBps <= type(uint16).max, "INITIAL_TAX_BPS must fit in uint16");
+        uint16 tax = uint16(taxBps);
 
         string memory tokenName = vm.envOr("TOKEN_NAME", string("ACT.X Token"));
         string memory tokenSymbol = vm.envOr("TOKEN_SYMBOL", string("ACTX"));
