@@ -61,6 +61,59 @@ contract ACTXTest is Test {
         assertEq(token.balanceOf(bob), 10 ether);
     }
 
+    function test_taxExemptBothSenderAndReceiver() public {
+        // Test that tax is skipped when both sender and receiver are exempt
+        vm.prank(treasury);
+        token.setTaxExempt(alice, true);
+        vm.prank(treasury);
+        token.setTaxExempt(bob, true);
+
+        vm.prank(treasury);
+        assertTrue(token.transfer(alice, 100 ether));
+
+        vm.prank(alice);
+        assertTrue(token.transfer(bob, 50 ether));
+
+        // No tax should be collected
+        assertEq(token.balanceOf(reservoir), 0);
+        assertEq(token.balanceOf(bob), 50 ether);
+        assertEq(token.balanceOf(alice), 50 ether);
+    }
+
+    function test_taxExemptOnlySender() public {
+        // Test that tax is skipped when only sender is exempt
+        vm.prank(treasury);
+        token.setTaxExempt(alice, true);
+        // bob is NOT exempt
+
+        vm.prank(treasury);
+        assertTrue(token.transfer(alice, 100 ether));
+
+        vm.prank(alice);
+        assertTrue(token.transfer(bob, 10 ether));
+
+        // No tax because sender (alice) is exempt
+        assertEq(token.balanceOf(reservoir), 0);
+        assertEq(token.balanceOf(bob), 10 ether);
+    }
+
+    function test_taxExemptOnlyReceiver() public {
+        // Test that tax is skipped when only receiver is exempt
+        vm.prank(treasury);
+        token.setTaxExempt(bob, true);
+        // alice is NOT exempt
+
+        vm.prank(treasury);
+        assertTrue(token.transfer(alice, 100 ether));
+
+        vm.prank(alice);
+        assertTrue(token.transfer(bob, 10 ether));
+
+        // No tax because receiver (bob) is exempt
+        assertEq(token.balanceOf(reservoir), 0);
+        assertEq(token.balanceOf(bob), 10 ether);
+    }
+
     function test_reservoirUpdateMovesExemptions() public {
         address newReservoir = address(0xABCD);
 

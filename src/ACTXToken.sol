@@ -211,12 +211,16 @@ contract ACTXToken is
     // --- Transfer override with tax ---
     function _update(address from, address to, uint256 amount) internal override(ERC20Upgradeable) {
         bool isStandardTransfer = from != address(0) && to != address(0);
-        bool applyTax = isStandardTransfer && _taxRateBasisPoints > 0 && !_isTaxExempt[from] && !_isTaxExempt[to];
+        bool exempt = _isTaxExempt[from] || _isTaxExempt[to];
+        bool applyTax = isStandardTransfer && _taxRateBasisPoints > 0 && !exempt;
 
         if (applyTax) {
             uint256 tax = (amount * uint256(_taxRateBasisPoints)) / 10_000;
             if (tax > 0) {
-                uint256 netAmount = amount - tax;
+                uint256 netAmount;
+                unchecked {
+                    netAmount = amount - tax;
+                }
                 super._update(from, _reservoirAddress, tax);
                 super._update(from, to, netAmount);
                 emit TaxCollected(from, to, amount, tax);
@@ -253,4 +257,7 @@ contract ACTXToken is
         _isTaxExempt[account] = exempt;
         emit TaxExemptUpdated(account, exempt);
     }
+
+    /// @dev Storage gap for future upgrades
+    uint256[50] private __gap;
 }
