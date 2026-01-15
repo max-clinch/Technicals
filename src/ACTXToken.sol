@@ -7,7 +7,6 @@ import {
 } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
@@ -22,7 +21,6 @@ contract ACTXToken is
     ERC20Upgradeable,
     ERC20BurnableUpgradeable,
     AccessControlUpgradeable,
-    OwnableUpgradeable,
     UUPSUpgradeable
 {
     /// Roles
@@ -83,7 +81,6 @@ contract ACTXToken is
         __ERC20_init(name_, symbol_);
         __ERC20Burnable_init();
         __AccessControl_init();
-        __Ownable_init(treasury);
 
         // Roles
         _grantRole(DEFAULT_ADMIN_ROLE, treasury);
@@ -130,35 +127,35 @@ contract ACTXToken is
     }
 
     // --- Admin functions (only owner / multisig expected) ---
-    /// @notice Update tax rate (only owner/multisig)
-    function setTaxRate(uint16 newTaxBps) external onlyOwner {
+    /// @notice Update tax rate (only admin role)
+    function setTaxRate(uint16 newTaxBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newTaxBps <= MAX_TAX_BPS, "tax-too-high");
         uint16 old = _taxRateBasisPoints;
         _taxRateBasisPoints = newTaxBps;
         emit TaxRateUpdated(old, newTaxBps);
     }
 
-    /// @notice Update reservoir address (only owner)
-    function setReservoirAddress(address newReservoir) external onlyOwner {
+    /// @notice Update reservoir address (only admin role)
+    function setReservoirAddress(address newReservoir) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newReservoir != address(0), "zero-reservoir");
         address old = _reservoirAddress;
         _reservoirAddress = newReservoir;
         _setTaxExemptInternal(newReservoir, true);
-        if (old != owner() && old != _rewardPool) {
+        if (old != address(0) && old != _rewardPool) {
             _setTaxExemptInternal(old, false);
         }
         emit ReservoirUpdated(old, newReservoir);
     }
 
     /// @notice Set tax exemption for an account
-    function setTaxExempt(address account, bool exempt) external onlyOwner {
+    function setTaxExempt(address account, bool exempt) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(account != address(0), "zero-account");
         _setTaxExemptInternal(account, exempt);
     }
 
     /// @notice Move reward pool bookkeeping to a new address (e.g. dedicated vault)
     /// @dev Any balance held by the previous pool is automatically migrated
-    function setRewardPool(address newPool) external onlyOwner {
+    function setRewardPool(address newPool) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newPool != address(0), "zero-pool");
         address oldPool = _rewardPool;
         if (oldPool == newPool) {
@@ -173,7 +170,7 @@ contract ACTXToken is
             _transfer(oldPool, newPool, balanceToMove);
         }
 
-        if (oldPool != owner() && oldPool != _reservoirAddress) {
+        if (oldPool != address(0) && oldPool != _reservoirAddress) {
             _setTaxExemptInternal(oldPool, false);
         }
 
@@ -194,15 +191,15 @@ contract ACTXToken is
         _distributeReward(recipient, amount, activityId);
     }
 
-    /// @notice Allow owner to fund internal reward pool
-    function fundRewardPool(uint256 amount) external onlyOwner {
+    /// @notice Allow admin role to fund internal reward pool
+    function fundRewardPool(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(amount > 0, "zero-amount");
-        _transfer(owner(), _rewardPool, amount);
+        _transfer(msg.sender, _rewardPool, amount);
         emit RewardPoolFunded(msg.sender, amount, rewardPoolBalance());
     }
 
-    /// @notice Owner can withdraw from internal reward pool
-    function withdrawFromPool(address to, uint256 amount) external onlyOwner {
+    /// @notice Admin role can withdraw from internal reward pool
+    function withdrawFromPool(address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(to != address(0), "zero-to");
         _transfer(_rewardPool, to, amount);
         emit RewardPoolWithdrawn(to, amount, rewardPoolBalance());
@@ -234,8 +231,8 @@ contract ACTXToken is
     // --- Upgradeability guard ---
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
-    // --- Rescue helpers (owner only) ---
-    function rescueERC20(address token, address to, uint256 amount) external onlyOwner {
+    // --- Rescue helpers (admin role only) ---
+    function rescueERC20(address token, address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(token != address(this), "cannot rescue self");
         require(to != address(0), "zero-to");
         require(IERC20(token).transfer(to, amount), "rescue-failed");
